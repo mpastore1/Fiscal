@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 1. The Starting Splash Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0B0E1A</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
+
+        <!-- Native system flags to clear top spacing structures -->
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <!-- 2. Your Base App Theme -->
+    <!-- Using DeviceDefault.NoActionBar handles modern full screen compose space cleanly -->
+    <style name="AppTheme" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#0B0E1A</item>
+        <item name="android:statusBarColor">#0B0E1A</item>
+        <item name="android:navigationBarColor">#0B0E1A</item>
+
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

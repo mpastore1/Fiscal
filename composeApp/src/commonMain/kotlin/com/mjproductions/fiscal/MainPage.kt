@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fiscal.composeapp.generated.resources.Res
 import fiscal.composeapp.generated.resources.fiscallogo_nobg
+import fiscal.composeapp.generated.resources.wrench
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -42,7 +43,7 @@ data class Message(val text: String, val isUser: Boolean)
 const val SERVER_URL = "http://127.0.0.1:8000/chat"
 
 @Composable
-fun MainPage() {
+fun MainPage(onNavigateToOptions: () -> Unit) {
     var inputText by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
     val messages = remember { mutableStateListOf<Message>() }
@@ -317,6 +318,33 @@ fun MainPage() {
                 }
             }
         }
+
+
+        // --- Options button (top right) ---
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 56.dp, end = 20.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(Color(0xFF111827), CircleShape)
+                    .clickable { onNavigateToOptions() },
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(Res.drawable.wrench),
+                    contentDescription = "Options",
+                    colorFilter = ColorFilter.tint(Color(0xFF38BDF8)),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+
+
     }
 }
 

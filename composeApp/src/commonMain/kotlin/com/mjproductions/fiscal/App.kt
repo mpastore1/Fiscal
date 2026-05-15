@@ -6,11 +6,11 @@ import androidx.compose.ui.tooling.preview.Preview
 @Composable
 @Preview
 fun App() {
-    var showIntro by remember { mutableStateOf(true) }
+    var currentScreen by remember { mutableStateOf("intro") }
 
-    if (showIntro) {
-        IntroScreen(onFinished = { showIntro = false })
-    } else {
-        MainPage() // your current MainPage
+    when (currentScreen) {
+        "intro"   -> IntroScreen(onFinished = { currentScreen = "main" })
+        "main"    -> MainPage(onNavigateToOptions = { currentScreen = "options" })
+        "options" -> options(onBack = { currentScreen = "main" })
     }
 }

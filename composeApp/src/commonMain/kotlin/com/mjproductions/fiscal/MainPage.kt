@@ -35,21 +35,39 @@ import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.text.font.FontVariation.Settings  // keep if needed elsewhere
+import com.russhwolf.settings.Settings as AppSettings         // alias to avoid conflict
+import com.russhwolf.settings.set
+import io.ktor.utils.io.core.EOFException
 
 data class Chip(val label: String, val offsetX: Float, val offsetY: Float, val rotation: Float)
 data class Message(val text: String, val isUser: Boolean)
 
 
-const val SERVER_URL = "http://127.0.0.1:8000/chat"
-
+const val SERVER_URL = "http://192.168.4.54:8000/chat"
 @Composable
-fun MainPage(onNavigateToOptions: () -> Unit) {
+fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
+             showTutorial: Boolean = false) {
     var inputText by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
     val messages = remember { mutableStateListOf<Message>() }
     var isResponding by remember { mutableStateOf(false) }
+    val speechRecognizer = rememberSpeechRecognizer()
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    var tutorialActive by remember { mutableStateOf(showTutorial) }
+
+
+
+    var tutorialStep by remember { mutableStateOf(0) }
+    val tutorialSteps = listOf(
+        TutorialStep("logo",    "Welcome to Fiscal! Your personal AI financial assistant.", Alignment.Center),
+        TutorialStep("chips",   "Tap any suggestion to get started quickly.", Alignment.TopCenter),
+        TutorialStep("input",   "Or type your own question here.", Alignment.BottomCenter),
+        TutorialStep("mic",     "Use your voice to ask Fiscal anything hands-free.", Alignment.BottomCenter),
+        TutorialStep("options", "Access settings and preferences here to link your bank account.", Alignment.TopEnd),
+    )
 
     val suggestions = listOf(
         Chip("📈 How do I invest?",           -100f,  0f,   -8f),
@@ -64,6 +82,9 @@ fun MainPage(onNavigateToOptions: () -> Unit) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
+
+
+
     // Show chips only when no messages yet
     val showChips = messages.isEmpty()
 
@@ -79,37 +100,35 @@ fun MainPage(onNavigateToOptions: () -> Unit) {
         messages.add(Message("", isUser = false))
 
         coroutineScope.launch {
+            val client = HttpClient()
             try {
-                val client = HttpClient()
                 client.preparePost(SERVER_URL) {
                     contentType(ContentType.Application.Json)
-                    setBody("""{"message": "${text.replace("\"", "\\\"")}"}""")
+                    setBody("""{"messages":[{"role":"user","content":"${text.replace("\"", "\\\"")}"}]}""")
                 }.execute { response ->
                     val channel = response.bodyAsChannel()
-                    val buffer = StringBuilder()
-                    while (!channel.isClosedForRead) {
-                        val byte = channel.readByte()
-                        val char = byte.toInt().toChar()
-                        buffer.append(char)
+                    val buf = ByteArray(1024)
+                    while (true) {
+                        val n = channel.readAvailable(buf, 0, buf.size)
+                        if (n == -1) break          // clean EOF
+                        if (n == 0) continue
+                        val chunk = buf.decodeToString(0, n)   // proper UTF-8 decode
                         val last = messages.last()
-                        messages[messages.size - 1] = Message(last.text + char, isUser = false)
-
+                        messages[messages.size - 1] = Message(last.text + chunk, isUser = false)
                     }
-                    client.close()
                 }
+            } catch (e: EOFException) {
+                // stream ended mid-read — treat as normal end
             } catch (e: Exception) {
-                if (e::class.simpleName != "ClosedReceiveChannelException") {
-                    println("FiscalChat ERROR: ${e::class.simpleName}: ${e.message}")
-                    if (messages.isNotEmpty()) {
-                        messages[messages.size - 1] = Message(
-                            "Sorry, I couldn't connect to the server.",
-                            isUser = false
-                        )
-                    }
+                println("FiscalChat ERROR: ${e::class.simpleName}: ${e.message}")
+                if (messages.isNotEmpty() && messages.last().text.isEmpty()) {
+                    messages[messages.size - 1] =
+                        Message("Sorry, I couldn't connect to the server.", isUser = false)
                 }
+            } finally {
+                client.close()
                 isResponding = false
             }
-            isResponding = false
         }
     }
 
@@ -283,17 +302,77 @@ fun MainPage(onNavigateToOptions: () -> Unit) {
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                val ringTransition = rememberInfiniteTransition(label = "micRing")
+                val ringScale by ringTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.6f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1100, easing = EaseInOutSine),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "ringScale"
+                )
+                val ringAlpha by ringTransition.animateFloat(
+                    initialValue = 0.5f,
+                    targetValue = 0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1100, easing = EaseInOutSine),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "ringAlpha"
+                )
+
                 Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(
-                            if (isListening) Color(0xFF38BDF8) else Color(0xFF1E293B),
-                            CircleShape
-                        )
-                        .clickable { isListening = !isListening },
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Text("🎤", fontSize = 16.sp)
+                    if (isListening) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .graphicsLayer {
+                                    scaleX = ringScale
+                                    scaleY = ringScale
+                                    alpha = ringAlpha
+                                }
+                                .background(Color(0xFF38BDF8), CircleShape)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(
+                                if (isListening) Color(0xFF38BDF8) else Color(0xFF1E293B),
+                                CircleShape
+                            )
+                            .clickable {
+                                if (isListening) {
+                                    speechRecognizer.stop()
+                                    isListening = false
+                                } else {
+                                    isListening = true
+                                    speechRecognizer.start(
+                                        onResult = { text ->
+                                            inputText = text
+                                            isListening = false
+                                            sendMessage()
+                                        },
+                                        onError = { err ->
+                                            println("Speech error: $err")
+                                            isListening = false
+                                        }
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isListening) {
+                            WaveBars(color = Color(0xFF080E1A))     // dark bars on bright button
+                        } else {
+                            Text("🎤", fontSize = 16.sp)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -343,7 +422,62 @@ fun MainPage(onNavigateToOptions: () -> Unit) {
             }
         }
 
+        // --- Tutorial Overlay ---
+        if (tutorialActive && tutorialStep < tutorialSteps.size) {
+            val step = tutorialSteps[tutorialStep]
 
+            // Dim background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF000000).copy(alpha = 0.75f))
+                    .clickable {
+                        if (tutorialStep < tutorialSteps.size - 1) tutorialStep++
+                        else tutorialActive = false
+                    }
+            )
+
+            // Highlight card
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = when (step.targetDescription) {
+                    "logo"    -> Alignment.TopCenter
+                    "chips"   -> Alignment.TopCenter
+                    "input"   -> Alignment.BottomCenter
+                    "mic"     -> Alignment.BottomCenter
+                    "options" -> Alignment.TopEnd
+                    else      -> Alignment.Center
+                }
+            ) {
+                val cardPadding = when (step.targetDescription) {
+                    "logo"    -> PaddingValues(top = 260.dp, start = 24.dp, end = 24.dp)
+                    "chips"   -> PaddingValues(top = 300.dp, start = 24.dp, end = 24.dp)
+                    "input"   -> PaddingValues(bottom = 120.dp, start = 24.dp, end = 24.dp)
+                    "mic"     -> PaddingValues(bottom = 120.dp, start = 24.dp, end = 24.dp)
+                    "options" -> PaddingValues(top = 110.dp, end = 24.dp, start = 24.dp)
+                    else      -> PaddingValues(24.dp)
+                }
+
+                Box(modifier = Modifier.padding(cardPadding)) {
+                    TutorialCard(
+                        step = tutorialStep,
+                        total = tutorialSteps.size,
+                        message = step.message,
+                        onNext = {
+                            if (tutorialStep < tutorialSteps.size - 1) tutorialStep++
+                            else {
+                                onTutorialComplete()  // ← calls App.kt's lambda instead
+                                tutorialActive = false
+                            }
+                        },
+                        onSkip = {
+                            onTutorialComplete()
+                            tutorialActive = false
+                        }
+                    )
+                }
+            }
+        }
 
     }
 }
@@ -378,6 +512,34 @@ fun ChatBubble(message: Message) {
 }
 
 @Composable
+fun WaveBars(color: Color) {
+    val transition = rememberInfiniteTransition(label = "bars")
+    val delays = listOf(0, 120, 240, 360, 180)  // staggered so bars don't sync
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        delays.forEach { delay ->
+            val height by transition.animateFloat(
+                initialValue = 4f,
+                targetValue = 18f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(450, delayMillis = delay, easing = EaseInOutSine),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "bar$delay"
+            )
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .height(height.dp)
+                    .background(color, RoundedCornerShape(2.dp))
+            )
+        }
+    }
+}
+@Composable
 fun SuggestionChip(
     label: String,
     offsetX: Float,
@@ -396,3 +558,81 @@ fun SuggestionChip(
         Text(label, color = Color(0xFFE0F2FE), fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
+
+
+@Composable
+fun TutorialCard(
+    step: Int,
+    total: Int,
+    message: String,
+    onNext: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0D1B2E), RoundedCornerShape(20.dp))
+            .padding(20.dp)
+    ) {
+        // Step indicator dots
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            repeat(total) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(if (index == step) 20.dp else 6.dp, 6.dp)
+                        .background(
+                            if (index == step) Color(0xFF38BDF8)
+                            else Color(0xFF1E3A5F),
+                            RoundedCornerShape(3.dp)
+                        )
+                )
+            }
+        }
+
+        Text(
+            text = message,
+            color = Color(0xFFE0F2FE),
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Skip",
+                color = Color(0xFF4B5563),
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { onSkip() }
+            )
+
+            Box(
+                modifier = Modifier
+                    .background(Color(0xFF38BDF8), RoundedCornerShape(20.dp))
+                    .clickable { onNext() }
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (step == total - 1) "Done" else "Next →",
+                    color = Color(0xFF080E1A),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+data class TutorialStep(
+    val targetDescription: String,
+    val message: String,
+    val alignment: Alignment
+)

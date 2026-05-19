@@ -4,5 +4,9 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Fiscal uses the microphone so you can ask financial questions by voice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Fiscal converts your speech to text to answer your questions.</string>
 </dict>
 </plist>

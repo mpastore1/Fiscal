@@ -38,6 +38,8 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+            implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)

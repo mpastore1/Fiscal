@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="faq_q1">Is it safe to link my bank account?</string>
+    <string name="faq_a1">Yes, we use a platform called Plaid that securely connects financial accounts to mobile and web applications. It serves as a trusted bridge, allowing you to safely share your bank data — the same technology used by PayPal, Airbnb, and Coinbase.</string>
+
+    <string name="faq_q2">What does Fiscal Help With?</string>
+    <string name="faq_a2">Fiscal can help with helping you save money and offer advice on your spending habits. By view your investments and bank transactions, it will conclude how to help you</string>
+
+    <string name="faq_q3">How can I get started?</string>
+    <string name="faq_a3">Link your bank account so Fiscal can read your transactions, investments, loans, and credit card amounts. Tap the Link Bank account option on the options page up top </string>
+
+
+</resources>
+

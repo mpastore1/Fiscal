@@ -16,8 +16,7 @@ import platform.Speech.SFSpeechRecognizer
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
-// SFSpeechRecognizerAuthorizationStatus is an NSInteger enum:
-// 0 = notDetermined, 1 = denied, 2 = restricted, 3 = authorized
+
 private const val AUTH_STATUS_AUTHORIZED = 3L
 
 class IosSpeechRecognizer : SpeechRecognizer {
@@ -59,7 +58,6 @@ class IosSpeechRecognizer : SpeechRecognizer {
             val inputNode = audioEngine.inputNode
             val format = inputNode.outputFormatForBus(0u)
 
-            // Install tap and start engine FIRST so audio is flowing
             inputNode.installTapOnBus(0u, 1024u, format) { buffer, _ ->
                 buffer?.let { req.appendAudioPCMBuffer(it) }
             }
@@ -67,7 +65,6 @@ class IosSpeechRecognizer : SpeechRecognizer {
             audioEngine.prepare()
             audioEngine.startAndReturnError(null)
 
-            // THEN start the recognition task
             task = recognizer.recognitionTaskWithRequest(req) { result, error ->
                 if (result != null && result.isFinal()) {
                     onResult(result.bestTranscription.formattedString)

@@ -32,22 +32,22 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.utils.io.*
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import androidx.compose.ui.text.font.FontVariation.Settings  // keep if needed elsewhere
-import com.russhwolf.settings.Settings as AppSettings         // alias to avoid conflict
-import com.russhwolf.settings.set
 import io.ktor.utils.io.core.EOFException
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 data class Chip(val label: String, val offsetX: Float, val offsetY: Float, val rotation: Float)
 data class Message(val text: String, val isUser: Boolean)
 
 
-const val SERVER_URL = "http://192.168.4.54:8000/chat"
+const val SERVER_URL = "https://mj-prod-fiscal.hf.space/chat"
+
 @Composable
 fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
-             showTutorial: Boolean = false) {
+             showTutorial: Boolean = false,  authToken: String = "") {
     var inputText by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
     val messages = remember { mutableStateListOf<Message>() }
@@ -77,15 +77,26 @@ fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
         Chip("💳 Pay off debt faster",         -80f,  140f, -6f),
         Chip("🪙 Compound interest?",           95f,  160f,  5f),
     )
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+
+
+    LaunchedEffect(Unit) {
+        // Reset conversation memory on the server when MainPage loads
+        coroutineScope.launch {
+            val client = HttpClient()
+            try {
+                client.post("https://mj-prod-fiscal.hf.space/reset") {
+                    header("Authorization", "Bearer $authToken")
+                    contentType(ContentType.Application.Json)
+                }
+            } catch (e: Exception) {
+                println("Reset error: ${e.message}")
+            } finally {
+                client.close()
+            }
         }
     }
 
 
-
-    // Show chips only when no messages yet
     val showChips = messages.isEmpty()
 
     fun sendMessage() {
@@ -94,31 +105,53 @@ fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
         inputText = ""
         isResponding = true
 
-        // Add user message
         messages.add(Message(text, isUser = true))
-// Adding empty AI message
         messages.add(Message("", isUser = false))
 
         coroutineScope.launch {
             val client = HttpClient()
             try {
-                client.preparePost(SERVER_URL) {
+                client.preparePost("https://mj-prod-fiscal.hf.space/chat/stream") {
                     contentType(ContentType.Application.Json)
-                    setBody("""{"messages":[{"role":"user","content":"${text.replace("\"", "\\\"")}"}]}""")
+                    header("Authorization", "Bearer $authToken")
+                    setBody("""{"message":"${text.replace("\"", "\\\"")}"}""")
                 }.execute { response ->
                     val channel = response.bodyAsChannel()
-                    val buf = ByteArray(1024)
+                    val buf = ByteArray(4096)
+
                     while (true) {
                         val n = channel.readAvailable(buf, 0, buf.size)
-                        if (n == -1) break          // clean EOF
+                        if (n == -1) break
                         if (n == 0) continue
-                        val chunk = buf.decodeToString(0, n)   // proper UTF-8 decode
-                        val last = messages.last()
-                        messages[messages.size - 1] = Message(last.text + chunk, isUser = false)
+
+                        val raw = buf.decodeToString(0, n)
+
+                        // Parse SSE format: "data: {"chunk": "..."}\n\n"
+                        raw.split("\n").forEach { line ->
+                            if (line.startsWith("data: ")) {
+                                val data = line.removePrefix("data: ").trim()
+                                if (data == "[DONE]") return@forEach
+
+                                try {
+                                    val json = kotlinx.serialization.json.Json
+                                        .parseToJsonElement(data)
+                                    val chunk = json.jsonObject["chunk"]
+                                        ?.jsonPrimitive?.content ?: ""
+
+                                    if (chunk.isNotEmpty()) {
+                                        val last = messages.last()
+                                        messages[messages.size - 1] =
+                                            Message(last.text + chunk, isUser = false)
+                                    }
+                                } catch (e: Exception) {
+                                    // skip malformed chunks
+                                }
+                            }
+                        }
                     }
                 }
             } catch (e: EOFException) {
-                // stream ended mid-read — treat as normal end
+                // normal stream end
             } catch (e: Exception) {
                 println("FiscalChat ERROR: ${e::class.simpleName}: ${e.message}")
                 if (messages.isNotEmpty() && messages.last().text.isEmpty()) {
@@ -131,7 +164,6 @@ fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
             }
         }
     }
-
     // Glow animations
     val glowAlpha by rememberInfiniteTransition(label = "glow")
         .animateFloat(
@@ -268,7 +300,6 @@ fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
             }
         }
 
-        // --- Input bar pinned to bottom ---
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -368,7 +399,7 @@ fun MainPage(onNavigateToOptions: () -> Unit,onTutorialComplete: () -> Unit,
                         contentAlignment = Alignment.Center
                     ) {
                         if (isListening) {
-                            WaveBars(color = Color(0xFF080E1A))     // dark bars on bright button
+                            WaveBars(color = Color(0xFF080E1A))
                         } else {
                             Text("🎤", fontSize = 16.sp)
                         }
@@ -539,6 +570,7 @@ fun WaveBars(color: Color) {
         }
     }
 }
+
 @Composable
 fun SuggestionChip(
     label: String,

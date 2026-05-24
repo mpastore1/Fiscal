@@ -47,7 +47,7 @@ import org.jetbrains.compose.resources.stringResource
 data class OptionItem(val icon: DrawableResource, val label: String, val subtitle: String)
 
 @Composable
-fun options(onBack: () -> Unit) {
+fun options(onBack: () -> Unit, onSignOut: () -> Unit) {
     var activeSheet by remember { mutableStateOf<String?>(null) }
 
     val optionsList = listOf(
@@ -55,6 +55,7 @@ fun options(onBack: () -> Unit) {
         OptionItem(Res.drawable.question_mark,     "FAQ",               "Common questions answered"),
         OptionItem(Res.drawable.wrench,    "Modify Fiscal",     "Personalise your assistant"),
         OptionItem(Res.drawable.support_agent,    "Contact",           "Get in touch with us about anything"),
+        OptionItem(Res.drawable.arrow_back,      "Sign Out",          "Log out of your account"),
     )
 
     Box(
@@ -72,7 +73,6 @@ fun options(onBack: () -> Unit) {
                 }
             }
     ) {
-        // --- Main content ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -198,6 +198,7 @@ fun options(onBack: () -> Unit) {
                         "FAQ"               -> SheetFAQ()
                         "Modify Fiscal"     -> SheetModifyFiscal()
                         "Contact"           -> SheetContact()
+                        "Sign Out"          -> SheetSignOut(onSignOut = onSignOut)
                     }
                 }
             }
@@ -214,6 +215,39 @@ fun SheetLinkBank() {
         color = Color(0xFF94A3B8), fontSize = 14.sp, lineHeight = 22.sp
     )
 }
+
+@Composable
+fun SheetSignOut(onSignOut: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            "Are you sure you want to sign out?",
+            color = Color(0xFF94A3B8),
+            fontSize = 14.sp,
+            lineHeight = 22.sp
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1A0A0A), RoundedCornerShape(14.dp))
+                .clickable { onSignOut() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "Sign Out",
+                color = Color(0xFFEF4444),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
 
 @Composable
 fun SheetFAQ() {
